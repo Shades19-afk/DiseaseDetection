@@ -3,8 +3,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 from PIL import Image
+import pandas as pd
 import tensorflow as tf
 
 from src.data import build_dataset
@@ -17,7 +17,7 @@ from src.train import train_model
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description='Run a reproducible DenseNet baseline experiment for medical image detection.'
+        description='Run augmentation ablation experiments for a DenseNet baseline.'
     )
     parser.add_argument('--data-dir', type=str, required=True, help='Root directory containing class subfolders.')
     parser.add_argument('--val-dir', type=str, default=None, help='Optional separate validation directory path.')
@@ -25,9 +25,9 @@ def parse_args():
     parser.add_argument('--batch-size', type=int, default=16, help='Batch size for tf.data pipeline.')
     parser.add_argument('--epochs', type=int, default=10, help='Training epochs.')
     parser.add_argument('--learning-rate', type=float, default=1e-4, help='Adam learning rate.')
-    parser.add_argument('--augmentation', type=str, default='none', choices=['none', 'light', 'strong'], help='Augmentation strength for the training dataset.')
     parser.add_argument('--output-dir', type=str, default='runs', help='Base folder for experiment output.')
-    parser.add_argument('--experiment-name', type=str, default='baseline_densenet', help='Name for this experiment run.')
+    parser.add_argument('--experiment-name', type=str, default='augmentation_ablation', help='Name for this experiment run.')
+    parser.add_argument('--augmentations', type=str, default='none,light,strong', help='Comma-separated augmentation strength presets to compare.')
     return parser.parse_args()
 
 
@@ -50,10 +50,10 @@ def find_last_conv_layer(model):
     raise ValueError('No Conv2D layer found in model. Ensure the model is a convolutional architecture.')
 
 
-def save_metrics(metrics, path: Path):
+def save_json(data, path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, 'w', encoding='utf-8') as f:
-        json.dump(metrics, f, indent=2)
+        json.dump(data, f, indent=2)
 
 
 def save_gradcam_examples(model, dataset, output_dir: Path, last_conv_layer_name: str, max_examples: int = 3):
@@ -66,7 +66,6 @@ def save_gradcam_examples(model, dataset, output_dir: Path, last_conv_layer_name
             probs = preds.ravel()
             pred_labels = (probs > 0.5).astype(int)
         else:
-            probs = preds[:, 1] if preds.shape[-1] > 1 else preds[:, 0]
             pred_labels = preds.argmax(axis=1)
 
         for i in range(len(images)):
@@ -81,39 +80,66 @@ def save_gradcam_examples(model, dataset, output_dir: Path, last_conv_layer_name
             examples_saved += 1
 
 
-def main():
-    args = parse_args()
-    run_name = f'{args.experiment_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
-    out_dir = Path(args.output_dir) / run_name
-    tensorboard_dir = out_dir / 'tensorboard'
-    checkpoint_path = out_dir / 'checkpoints' / 'best_model.h5'
-    metrics_path = out_dir / 'metrics.json'
-    confusion_path = out_dir / 'confusion_matrix.png'
-    gradcam_dir = out_dir / 'gradcam'
-    misclassified_dir = out_dir / 'misclassified'
-
-    print('Stage 1: Load dataset with tf.data pipeline')
+def build_datasets(args, augmentation: str):
     if args.val_dir:
-        train_ds = build_dataset(args.data_dir, img_size=(args.img_size, args.img_size), batch_size=args.batch_size, augmentation=args.augmentation, subset=None)
-        val_ds = build_dataset(args.val_dir, img_size=(args.img_size, args.img_size), batch_size=args.batch_size, augment=False, subset=None)
+        train_ds = build_dataset(
+            args.data_dir,
+            img_size=(args.img_size, args.img_size),
+            batch_size=args.batch_size,
+            augmentation=augmentation,
+            subset=None,
+        )
+        val_ds = build_dataset(
+            args.val_dir,
+            img_size=(args.img_size, args.img_size),
+            batch_size=args.batch_size,
+            augment=False,
+            subset=None,
+        )
     else:
-        train_ds = build_dataset(args.data_dir, img_size=(args.img_size, args.img_size), batch_size=args.batch_size, augmentation=args.augmentation, subset='training', validation_split=0.2, seed=123)
-        val_ds = build_dataset(args.data_dir, img_size=(args.img_size, args.img_size), batch_size=args.batch_size, augment=False, subset='validation', validation_split=0.2, seed=123)
+        train_ds = build_dataset(
+            args.data_dir,
+            img_size=(args.img_size, args.img_size),
+            batch_size=args.batch_size,
+            augmentation=augmentation,
+            subset='training',
+            validation_split=0.2,
+            seed=123,
+        )
+        val_ds = build_dataset(
+            args.data_dir,
+            img_size=(args.img_size, args.img_size),
+            batch_size=args.batch_size,
+            augment=False,
+            subset='validation',
+            validation_split=0.2,
+            seed=123,
+        )
 
+    return train_ds, val_ds
+
+
+def run_experiment(args, augmentation: str, global_out: Path):
+    run_name = f'{augmentation}_aug'
+    run_dir = global_out / run_name
+    tensorboard_dir = run_dir / 'tensorboard'
+    checkpoint_path = run_dir / 'checkpoints' / 'best_model.h5'
+    metrics_path = run_dir / 'metrics.json'
+    confusion_path = run_dir / 'confusion_matrix.png'
+    gradcam_dir = run_dir / 'gradcam'
+    misclassified_dir = run_dir / 'misclassified'
+
+    print(f'=== Running augmentation experiment: {augmentation} ===')
+    train_ds, val_ds = build_datasets(args, augmentation)
     print(f'Classes: {train_ds.class_names}')
-    num_classes = len(train_ds.class_names)
-    print(f'Number of classes: {num_classes}')
 
-    print('Stage 2: Compute class weights to compensate for imbalance')
     class_weights = compute_class_weights(train_ds)
     print(f'Class weights: {class_weights}')
 
-    print('Stage 3: Build DenseNet baseline model')
+    num_classes = len(train_ds.class_names)
     model = get_densenet(input_shape=(args.img_size, args.img_size, 3), num_classes=1 if num_classes == 2 else num_classes)
-    print(model.summary())
 
-    print('Stage 4: Train model with TensorBoard logging and checkpoint saving')
-    history = train_model(
+    train_model(
         model,
         train_ds,
         val_ds,
@@ -124,40 +150,69 @@ def main():
         checkpoint_path=str(checkpoint_path),
     )
 
-    print('Stage 5: Evaluate model and compute robust metrics')
     metrics = evaluate_model(model, val_ds)
-    print('Evaluation results:')
-    for key, value in metrics.items():
-        if key == 'confusion_matrix':
-            continue
-        print(f'  {key}: {value}')
-    save_metrics(metrics, metrics_path)
+    save_json(metrics, metrics_path)
 
-    print('Stage 6: Save confusion matrix plot')
+    import matplotlib.pyplot as plt
     plot_confusion(metrics['confusion_matrix'], labels=train_ds.class_names)
+    confusion_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(confusion_path, dpi=200)
     plt.close()
 
-    print('Stage 7: Save false positives and false negatives for inspection')
     save_misclassified(model, val_ds, str(misclassified_dir))
-
-    print('Stage 8: Generate a few Grad-CAM visualizations')
     last_conv_layer = find_last_conv_layer(model)
     save_gradcam_examples(model, val_ds, gradcam_dir, last_conv_layer_name=last_conv_layer, max_examples=3)
 
     summary = {
-        'run_name': run_name,
-        'output_dir': str(out_dir),
-        'tensorboard_dir': str(tensorboard_dir),
-        'checkpoint': str(checkpoint_path),
+        'augmentation': augmentation,
         'metrics': metrics,
+        'checkpoint': str(checkpoint_path),
+        'tensorboard_dir': str(tensorboard_dir),
         'gradcam_dir': str(gradcam_dir),
         'misclassified_dir': str(misclassified_dir),
     }
-    save_metrics(summary, out_dir / 'run_summary.json')
-    print('Baseline experiment complete.')
-    print(f'Outputs saved to {out_dir}')
-    print('Start TensorBoard with: tensorboard --logdir', tensorboard_dir)
+    save_json(summary, run_dir / 'summary.json')
+    return summary
+
+
+def save_comparison_table(summaries, output_dir: Path):
+    records = []
+    for item in summaries:
+        row = {
+            'augmentation': item['augmentation'],
+            'precision': item['metrics']['precision'],
+            'recall': item['metrics']['recall'],
+            'f1': item['metrics']['f1'],
+            'roc_auc': item['metrics']['roc_auc'],
+        }
+        records.append(row)
+
+    df = pd.DataFrame(records)
+    df = df.sort_values('augmentation')
+    output_dir.mkdir(parents=True, exist_ok=True)
+    csv_path = output_dir / 'augmentation_comparison.csv'
+    df.to_csv(csv_path, index=False)
+    return df
+
+
+def main():
+    args = parse_args()
+    global_out = Path(args.output_dir) / f'{args.experiment_name}_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+    global_out.mkdir(parents=True, exist_ok=True)
+
+    augmentations = [x.strip() for x in args.augmentations.split(',') if x.strip()]
+    summaries = []
+    for augmentation in augmentations:
+        summary = run_experiment(args, augmentation, global_out)
+        summaries.append(summary)
+
+    comparison_df = save_comparison_table(summaries, global_out)
+    save_json({'comparison': comparison_df.to_dict(orient='records')}, global_out / 'comparison_summary.json')
+
+    print('\nFinal augmentation comparison:')
+    print(comparison_df.to_string(index=False))
+    print(f'All run artifacts and summaries saved under {global_out}')
+    print('Review TensorBoard logs for each run under each subfolder.')
 
 
 if __name__ == '__main__':

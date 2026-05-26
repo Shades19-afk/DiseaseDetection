@@ -31,4 +31,14 @@ The script creates a timestamped experiment folder under `runs/` with:
 - evaluation results in `metrics.json`
 - confusion matrix plot in `confusion_matrix.png`
 - Grad-CAM outputs in `gradcam/`
-- misclassified images in `misclassified/`
+- misclassified images in `misclassified/
+
+## Augmentation ablation harness
+
+After running the baseline pipeline, compare augmentation strength with:
+
+```bash
+python run_augmentation_ablation.py --data-dir path/to/data --batch-size 16 --epochs 10
+```
+
+This harness automatically runs three experiments: `none`, `light`, and `strong` augmentation. It saves separate metrics, confusion matrices, TensorBoard logs, Grad-CAM outputs, and a final `augmentation_comparison.csv` summary.

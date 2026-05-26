@@ -14,4 +14,12 @@ Baseline experiment command:
 python run_baseline.py --data-dir path/to/image-data --batch-size 16 --epochs 10
 ```
 
+Augmentation ablation command:
+
+```bash
+python run_augmentation_ablation.py --data-dir path/to/image-data --batch-size 16 --epochs 10
+```
+
+This will run three experimental conditions (`none`, `light`, `strong`) using the same train/validation split. Each condition saves separate metrics, confusion matrices, Grad-CAM outputs, and a summary table.
+
 Use the output folder under `runs/` to compare results across runs. For each experiment, record hypothesis, protocol, and results (metrics + visualizations).
