@@ -42,3 +42,20 @@ python run_augmentation_ablation.py --data-dir path/to/data --batch-size 16 --ep
 ```
 
 This harness automatically runs three experiments: `none`, `light`, and `strong` augmentation. It saves separate metrics, confusion matrices, TensorBoard logs, Grad-CAM outputs, and a final `augmentation_comparison.csv` summary.
+## Architecture comparison framework
+
+Use the same research-style pipeline to compare DenseNet121, ResNet50, and EfficientNetB0:
+
+```bash
+python run_model_comparison.py --data-dir path/to/data --batch-size 16 --epochs 10 --augmentation light
+```
+
+This script uses the same train/validation split and preprocessing pipeline for all models, then exports:
+- per-model metrics and confusion matrix
+- training time and parameter count
+- Grad-CAM examples
+- a final `architecture_comparison.csv`
+
+### Why compare architectures?
+
+Different backbones trade off representation power, parameter count, and inference cost. DenseNet often provides strong feature reuse for medical images, ResNet is a reliable residual baseline, and EfficientNet offers a lightweight accuracy tradeoff. Comparing them in the same experimental pipeline makes the result more reproducible and research-oriented.

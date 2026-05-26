@@ -50,10 +50,18 @@ def find_last_conv_layer(model):
     raise ValueError('No Conv2D layer found in model. Ensure the model is a convolutional architecture.')
 
 
+def to_serializable(value):
+    if isinstance(value, (list, str, int, float, bool)) or value is None:
+        return value
+    if hasattr(value, 'tolist'):
+        return value.tolist()
+    return str(value)
+
+
 def save_metrics(metrics, path: Path):
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, 'w', encoding='utf-8') as f:
-        json.dump(metrics, f, indent=2)
+        json.dump(metrics, f, indent=2, default=to_serializable)
 
 
 def save_gradcam_examples(model, dataset, output_dir: Path, last_conv_layer_name: str, max_examples: int = 3):
