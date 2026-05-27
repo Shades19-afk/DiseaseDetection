@@ -1,9 +1,5 @@
-tensorflow>=2.11
-scikit-learn
-matplotlib
-opencv-python
-pillow
-pandas
-seaborn
-tensorboard
-pytest
+streamlit>=1.37,<1.60
+numpy>=1.23,<3
+Pillow
+opencv-python-headless
+tensorflow-cpu>=2.15,<2.22

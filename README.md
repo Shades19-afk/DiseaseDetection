@@ -59,3 +59,22 @@ This script uses the same train/validation split and preprocessing pipeline for 
 ### Why compare architectures?
 
 Different backbones trade off representation power, parameter count, and inference cost. DenseNet often provides strong feature reuse for medical images, ResNet is a reliable residual baseline, and EfficientNet offers a lightweight accuracy tradeoff. Comparing them in the same experimental pipeline makes the result more reproducible and research-oriented.
+
+## Lightweight deployment demo
+
+This repository now includes an inference-oriented demo for deployment:
+
+- `streamlit_app.py` runs the interactive demo locally.
+- `app.py` is the Hugging Face Spaces entry point.
+- `src/inference.py` contains the reusable image preprocessing, model loading, prediction, and Grad-CAM pipeline.
+- `DEPLOYMENT.md` contains beginner-friendly setup and Space deployment instructions.
+
+Run the local demo with:
+
+```bash
+pip install -r requirements.txt
+streamlit run streamlit_app.py
+```
+
+The demo uploads an X-ray, predicts the class with confidence, and overlays a Grad-CAM heatmap for explainability.
+
