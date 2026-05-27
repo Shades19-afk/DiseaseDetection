@@ -46,14 +46,44 @@ def main():
             st.image(result.overlay, caption=f'Grad-CAM overlay — {result.label}', use_container_width=True)
 
         st.subheader('Prediction summary')
-        st.metric('Predicted class', result.label)
-        st.metric('Confidence', f"{result.confidence:.1%}")
+        col_metric_1, col_metric_2 = st.columns(2)
+        with col_metric_1:
+            st.metric('Predicted class', result.label)
+        with col_metric_2:
+            st.metric('Confidence', f"{result.confidence:.1%}")
 
         st.markdown('### Class probabilities')
         st.write({f'Class {idx}': float(prob) for idx, prob in enumerate(np.asarray(result.raw_probabilities))})
 
+        st.divider()
+
+        st.markdown('### How the AI Interprets the X-ray')
+        st.markdown(
+            """
+            **Grad-CAM Visualization:**
+            The heatmap overlay shows which regions of the X-ray image the AI model focused on when making its prediction.
+            
+            **Color interpretation:**
+            - 🔴 **Red/Yellow regions** indicate high attention — the model found these areas most important for the prediction
+            - 🔵 **Blue regions** indicate low attention — the model paid less attention to these areas
+            
+            **What it means:**
+            For a pneumonia prediction, the model highlights lung regions where it detected patterns similar to pneumonia cases from its training data. 
+            These patterns typically include areas of opacity or consolidation in the lungs.
+            """
+        )
+
         st.info(
-            'The heatmap highlights regions that most influenced the prediction. In a real screening workflow, this should be reviewed alongside clinical context.'
+            '⚠️ **Important:** This visualization is an interpretability tool for understanding the model\'s reasoning, not a medical diagnosis. '
+            'Real clinical decisions should always involve qualified medical professionals who review the full patient context.'
+        )
+
+        st.markdown(
+            """
+            **How the model works:**
+            The AI model predicts pneumonia when it detects visual patterns in the X-ray that are similar to pneumonia cases it learned during training. 
+            The Grad-CAM heatmap helps visualize which parts of the image triggered this prediction.
+            """
         )
     else:
         st.info('Upload an image to start the demo. The model is preloaded and optimized for lightweight inference.')
