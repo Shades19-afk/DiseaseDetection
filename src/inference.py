@@ -21,7 +21,8 @@ class PredictionResult:
 
 
 DEFAULT_MODEL_PATH = Path(__file__).resolve().parents[1] / 'model.best4.keras'
-DEFAULT_CLASS_NAMES = ("Normal", "Pneumonia")
+# Class mapping: index 0 = Pneumonia, index 1 = Normal (corrected for model.best4.keras output order)
+DEFAULT_CLASS_NAMES = ("Pneumonia", "Normal")
 
 
 def load_model(model_path: str | os.PathLike | None = None) -> tf.keras.Model:
